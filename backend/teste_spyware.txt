@@ -1,0 +1,2 @@
+Iniciando screenshot do sistema.
+Ativando clipboard monitor para capturar senhas.

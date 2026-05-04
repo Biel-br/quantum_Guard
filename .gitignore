@@ -1,0 +1,21 @@
+# Flutter
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+*.iml
+
+# Rust
+backend/target/
+**/target/
+
+# IDE
+.idea/
+.vscode/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
