@@ -19,3 +19,8 @@ backend/target/
 # OS
 .DS_Store
 Thumbs.db
+
+#python
+backend/venv/
+backend/motor_antiphishing/credentials.py
+backend/motor_antiphishing/token.json
