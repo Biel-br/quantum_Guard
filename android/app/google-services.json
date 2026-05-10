@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "237814584611",
+    "project_id": "quantum-guard-8bddf",
+    "storage_bucket": "quantum-guard-8bddf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:237814584611:android:94331c964b85efd70ee896",
+        "android_client_info": {
+          "package_name": "com.example.projeto_pdm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCverqmICcdo8otW1mV7lcw1L40a-Ns22k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

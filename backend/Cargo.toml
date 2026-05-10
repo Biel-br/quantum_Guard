@@ -13,3 +13,5 @@ hex = "0.4"
 tokio = { version = "1", features = ["full"] }
 yara-x = "0.10"
 sysinfo = "0.33"
+firestore = "0.43" 
+tokio = { version = "1", features = ["full"] }

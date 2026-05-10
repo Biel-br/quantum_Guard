@@ -1,6 +1,7 @@
 use actix_web::{post, web, App, HttpServer, HttpResponse};
 use actix_cors::Cors;
 use serde::Deserialize;
+use firestore::*;
 
 mod hash;
 mod url;
@@ -25,6 +26,7 @@ struct YaraRequest {
 // Rota Hash Scanner
 #[post("/hash/scan")]
 async fn hash_scan(body: web::Json<hash::HashRequest>) -> HttpResponse {
+    println!("📝 Gerando hash para o arquivo: {}", body.nome); // Agora o Rust fica feliz!
     let hash = hash::gerar_hash(&body.bytes);
     let resultado = hash::verificar(&hash);
     HttpResponse::Ok().json(resultado)
@@ -33,8 +35,29 @@ async fn hash_scan(body: web::Json<hash::HashRequest>) -> HttpResponse {
 // Rota Verificador de URL
 #[post("/url/verificar")]
 async fn url_verificar(body: web::Json<url::UrlRequest>) -> HttpResponse {
+    println!("📝 Verificando URL: {}", body.url);
     let resultado = url::verificar(&body.url);
     HttpResponse::Ok().json(resultado)
+}
+
+pub async fn salvar_deteccao(hash: String, ameaca: bool) -> Result<(), Box<dyn std::error::Error>> {
+    // Inicializa o cliente usando a variável de ambiente com o caminho do JSON
+    let db = FirestoreDb::new("id-do-seu-projeto").await?;
+
+    let log = serde_json::json!({
+        "hash": hash,
+        "ameaca": ameaca,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+
+    // Salva na coleção "logs_seguranca"
+    db.fluent()
+        .select_all()
+        .from("logs_seguranca")
+        .add(log)
+        .await?;
+
+    Ok(())
 }
 
 // Rota Verificador de Extensões

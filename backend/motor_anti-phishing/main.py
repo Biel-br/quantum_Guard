@@ -1,27 +1,109 @@
+import os
+import json
+import yara
+from datetime import datetime
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pypdf import PdfReader
+import pytesseract
+from PIL import Image
 import leitor_gmail
 
 app = FastAPI(
-    title="Quantum Guard - Anti-Phishing Engine",
-    description="API para análise e pontuação de risco de e-mails",
-    version="1.0"
+    title="Quantum Guard - Patrulha em Segundo Plano",
+    description="Motor autônomo que protege o Gmail e gera relatórios.",
+    version="2.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 servico_gmail = leitor_gmail.autenticar_gmail()
 
-@app.get("/")
-def home():
-    return {"status": "Motor Quantum Guard online e operando!"}
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PASTA_BACKEND = os.path.dirname(BASE_DIR)
+CAMINHO_REGRAS = os.path.join(PASTA_BACKEND, "regras", "malware.yar")
+ARQUIVO_DB = os.path.join(BASE_DIR, "historico_ameacas.json") # Nosso Banco de Dados
 
-@app.get("/api/v1/analisar-emails")
-def analisar_emails_api(quantidade: int = 3):
+regras_yara = None
+status_yara = "Carregado com sucesso"
+try:
+    if os.path.exists(CAMINHO_REGRAS): regras_yara = yara.compile(filepath=CAMINHO_REGRAS)
+    else: status_yara = "ERRO: Regras não encontradas"
+except Exception as e: status_yara = f"ERRO YARA: {e}"
+
+# ==========================================
+# FUNÇÕES DE APOIO (TRADUTOR E BANCO DE DADOS)
+# ==========================================
+
+def gerar_relatorio_humano(ameacas):
+    texto = "Nós removemos este e-mail da sua caixa de entrada porque ele contém armadilhas disfarçadas.\n\n"
+    regras_acionadas = [a["regra_acionada"] for a in ameacas]
+    
+    if "DetectarRansomware" in regras_acionadas:
+        texto += "• Ameaça de Extorsão: Existe um arquivo aqui que tenta bloquear seu celular ou computador para cobrar um 'resgate' em dinheiro (geralmente em criptomoedas).\n"
+    if "DetectarKeylogger" in regras_acionadas:
+        texto += "• Espião de Teclado: Encontramos um vírus oculto que tenta copiar tudo o que você digita, como suas senhas do banco, mensagens e dados de cartão.\n"
+    if "DetectarShellcode" in regras_acionadas or "DetectarBackdoor" in regras_acionadas:
+        texto += "• Invasão de Privacidade: Há um programa perigoso tentando abrir uma 'porta oculta' para alguém controlar seu aparelho à distância.\n"
+        
+    texto += "\nVocê não precisa se preocupar ou fazer nada. O Quantum Guard já isolou o perigo para você!"
+    return texto
+
+def salvar_ameaca_no_db(dados_ameaca):
+    """Salva a ameaça no arquivo JSON para o app Flutter ler depois."""
+    historico = []
+    if os.path.exists(ARQUIVO_DB):
+        try:
+            with open(ARQUIVO_DB, "r", encoding="utf-8") as f:
+                historico = json.load(f)
+        except: pass
+    
+    dados_ameaca["data_bloqueio"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+    historico.insert(0, dados_ameaca) # Coloca a mais recente no topo
+    
+    with open(ARQUIVO_DB, "w", encoding="utf-8") as f:
+        json.dump(historico, f, indent=4, ensure_ascii=False)
+
+def neutralizar_email(msg_id):
+    """Remove a etiqueta INBOX e adiciona SPAM usando a API do Gmail."""
+    try:
+        servico_gmail.users().messages().modify(
+            userId='me', id=msg_id, 
+            body={'addLabelIds': ['SPAM'], 'removeLabelIds': ['INBOX']}
+        ).execute()
+        return True
+    except Exception as e:
+        print(f"Erro ao neutralizar: {e}")
+        return False
+
+# ==========================================
+# ROTAS DA API
+# ==========================================
+
+@app.get("/api/v1/dashboard/historico")
+def obter_historico_dashboard():
+    """Rota leve que o app Flutter vai chamar para montar os gráficos e listas."""
+    if not os.path.exists(ARQUIVO_DB):
+        return {"ameacas_bloqueadas": [], "total": 0}
+    
+    with open(ARQUIVO_DB, "r", encoding="utf-8") as f:
+        historico = json.load(f)
+        
+    return {"ameacas_bloqueadas": historico, "total": len(historico)}
+
+@app.get("/api/v1/patrulha/executar")
+def executar_patrulha_invisivel(quantidade: int = 5):
+    """Rota que varre os últimos e-mails, neutraliza os ruins e salva no DB."""
     resultados = servico_gmail.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=quantidade).execute()
     mensagens = resultados.get('messages', [])
-
-    if not mensagens:
-        return {"analises": [], "mensagem": "Nenhum e-mail encontrado na caixa de entrada."}
-
-    lista_analises = []
+    
+    ameacas_neutralizadas_agora = 0
 
     for msg in mensagens:
         msg_id = msg['id']
@@ -31,54 +113,69 @@ def analisar_emails_api(quantidade: int = 3):
         
         assunto = "Sem Assunto"
         remetente = "Desconhecido"
-        
         for header in headers:
-            if header['name'] == 'Subject':
-                assunto = header['value']
-            if header['name'] == 'From':
-                remetente = header['value']
+            if header['name'] == 'Subject': assunto = header['value']
+            if header['name'] == 'From': remetente = header['value']
 
         dominio = leitor_gmail.extrair_dominio(remetente)
         spf, dkim, dmarc = leitor_gmail.analisar_autenticacao(headers)
-        
-        resultado_email = {
-            "id": msg_id,
-            "remetente": remetente,
-            "dominio": dominio,
-            "assunto": assunto,
-            "autenticacao": {
-                "spf_pass": spf,
-                "dkim_pass": dkim,
-                "dmarc_pass": dmarc
-            },
-            "acao_tomada": "",
-            "links_extraidos": [],
-            "anexos": [] # NOVO CAMPO PARA OS ANEXOS
-        }
 
-        # Lógica de Triagem Rápida
-        if dominio in leitor_gmail.ALLOWLIST_DOMINIOS and spf and dkim and dmarc:
-            resultado_email["acao_tomada"] = "FAST_PATH"
-            resultado_email["risco"] = "Baixo"
-        else:
-            resultado_email["acao_tomada"] = "DEEP_SCAN"
-            resultado_email["risco"] = "Em processamento..."
-            
-            texto_puro = ""
-            html = ""
-            
-            # Se o e-mail tem partes (HTML + Texto + Anexos)
+        # Se não passou na AllowList, faz o Deep Scan
+        if not (dominio in leitor_gmail.ALLOWLIST_DOMINIOS and spf and dkim and dmarc):
             if 'parts' in payload:
-                # 1. Extrai o texto e HTML
-                texto_puro, html = leitor_gmail.extrair_partes_email(payload['parts'])
-                # 2. Baixa os anexos (NOVO)
-                resultado_email["anexos"] = leitor_gmail.baixar_anexos(servico_gmail, msg_id, payload['parts'])
-            else:
-                if payload['mimeType'] == 'text/html':
-                    html = leitor_gmail.base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
-            
-            resultado_email["links_extraidos"] = leitor_gmail.extrair_links(html)
+                anexos_baixados = leitor_gmail.baixar_anexos(servico_gmail, msg_id, payload['parts'])
+                
+                if regras_yara and anexos_baixados:
+                    todas_ameacas = []
+                    for anexo in anexos_baixados:
+                        caminho_arquivo = anexo["caminho_local"]
+                        tipo = anexo["tipo"]
+                        
+                        if os.path.exists(caminho_arquivo):
+                            # Binário
+                            for m in regras_yara.match(caminho_arquivo): todas_ameacas.append(m.rule)
+                            
+                            # Extração de texto (PDF/OCR)
+                            texto_extraido = ""
+                            if tipo == "application/pdf":
+                                try:
+                                    leitor = PdfReader(caminho_arquivo)
+                                    for pagina in leitor.pages: texto_extraido += pagina.extract_text() + "\n"
+                                except: pass
+                            elif tipo in ["image/png", "image/jpeg", "image/jpg"]:
+                                try:
+                                    texto_extraido = pytesseract.image_to_string(Image.open(caminho_arquivo), lang='por')
+                                except: pass
 
-        lista_analises.append(resultado_email)
+                            # YARA no texto
+                            if texto_extraido.strip():
+                                caminho_txt = caminho_arquivo + ".txt"
+                                with open(caminho_txt, "w", encoding="utf-8") as f: f.write(texto_extraido)
+                                for m in regras_yara.match(caminho_txt):
+                                    if m.rule not in todas_ameacas: todas_ameacas.append(m.rule)
+                                os.remove(caminho_txt)
 
-    return {"analises": lista_analises}
+                    # SE ENCONTROU AMEAÇA, O CÃO DE GUARDA ATACA!
+                    if todas_ameacas:
+                        ameacas_formatadas = [{"arquivo": "Anexo Verificado", "regra_acionada": r} for r in todas_ameacas]
+                        
+                        dados_relatorio = {
+                            "id_email": msg_id,
+                            "remetente": remetente,
+                            "assunto": assunto,
+                            "ameacas_yara": ameacas_formatadas,
+                            "explicacao_humana": gerar_relatorio_humano(ameacas_formatadas)
+                        }
+                        
+                        # 1. Tira do INBOX e joga no SPAM
+                        sucesso_neutralizacao = neutralizar_email(msg_id)
+                        if sucesso_neutralizacao:
+                            # 2. Salva no banco de dados do Dashboard
+                            salvar_ameaca_no_db(dados_relatorio)
+                            ameacas_neutralizadas_agora += 1
+
+    return {
+        "status": "Patrulha Concluída",
+        "verificados": len(mensagens),
+        "neutralizados_agora": ameacas_neutralizadas_agora
+    }

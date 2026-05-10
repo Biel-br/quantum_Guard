@@ -1,8 +1,9 @@
 use sha2::{Sha256, Digest};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize}; 
 use std::fs;
 
-#[derive(Deserialize)]
+#[derive(Deserialize)] 
+#[allow(dead_code)]
 pub struct HashRequest {
     pub bytes: Vec<u8>,
     pub nome: String,
