@@ -8,6 +8,13 @@ from pypdf import PdfReader
 import pytesseract
 from PIL import Image
 import leitor_gmail
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+# Use o arquivo JSON que você baixou do console do Firebase (Chaves de serviço)
+cred = credentials.Certificate("quantum-guard-8bddf-firebase-adminsdk-fbsvc-f752e80f9f.json")
+firebase_admin.initialize_app(cred)
+db_firestore = firestore.client()
 
 app = FastAPI(
     title="Quantum Guard - Patrulha em Segundo Plano",
@@ -56,19 +63,14 @@ def gerar_relatorio_humano(ameacas):
     return texto
 
 def salvar_ameaca_no_db(dados_ameaca):
-    """Salva a ameaça no arquivo JSON para o app Flutter ler depois."""
-    historico = []
-    if os.path.exists(ARQUIVO_DB):
-        try:
-            with open(ARQUIVO_DB, "r", encoding="utf-8") as f:
-                historico = json.load(f)
-        except: pass
-    
-    dados_ameaca["data_bloqueio"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-    historico.insert(0, dados_ameaca) # Coloca a mais recente no topo
-    
-    with open(ARQUIVO_DB, "w", encoding="utf-8") as f:
-        json.dump(historico, f, indent=4, ensure_ascii=False)
+    """Envia a ameaça direto para a nuvem para o Flutter apitar na hora."""
+    try:
+        dados_ameaca["data_bloqueio"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+        # Isso aqui é o que dispara o 'listen' no seu app Flutter
+        db_firestore.collection('logs_seguranca').add(dados_ameaca)
+        print("✅ Alerta enviado para o Firebase!")
+    except Exception as e:
+        print(f"❌ Erro ao enviar para o Firebase: {e}")
 
 def neutralizar_email(msg_id):
     """Remove a etiqueta INBOX e adiciona SPAM usando a API do Gmail."""
@@ -98,7 +100,7 @@ def obter_historico_dashboard():
     return {"ameacas_bloqueadas": historico, "total": len(historico)}
 
 @app.get("/api/v1/patrulha/executar")
-def executar_patrulha_invisivel(quantidade: int = 5):
+def executar_patrulha_invisivel(quantidade: int = 50):
     """Rota que varre os últimos e-mails, neutraliza os ruins e salva no DB."""
     resultados = servico_gmail.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=quantidade).execute()
     mensagens = resultados.get('messages', [])

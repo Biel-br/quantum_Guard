@@ -5,6 +5,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+import pytesseract
+from PIL import Image
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 ALLOWLIST_DOMINIOS = ['duolingo.com', 'twitch.tv', 'github.com', 'linkedin.com']
@@ -77,11 +79,19 @@ def baixar_anexos(servico, msg_id, parts):
             with open(caminho_arquivo, 'wb') as f:
                 f.write(file_data)
                 
+            ameaca_encontrada, texto_img = analisar_imagem_ocr(caminho_arquivo)
+            if ameaca_encontrada:
+                print(f"🚨 ALERTA: Imagem maliciosa detectada no arquivo {filename}!")
+                print(f"Texto extraído: {texto_img}")
+                # AQUI você chamará a função para salvar o log no Firebase Firestore!
+            # -------------------------------------------
+                
             anexos_baixados.append({
                 "nome_arquivo": filename,
                 "caminho_local": caminho_arquivo,
                 "tipo": mime_type,
-                "tamanho_bytes": len(file_data)
+                "tamanho_bytes": len(file_data),
+                "ameaca_ocr": ameaca_encontrada # Guarda o resultado no dicionário
             })
             
         # Tratamento de e-mails complexos (recursão)
@@ -106,3 +116,38 @@ def extrair_dominio(remetente):
     if '@' in remetente:
         return remetente.split('@')[-1].replace('>', '').strip()
     return ""
+
+def analisar_imagem_ocr(caminho_arquivo):
+    """
+    Abre a imagem salva, lê o texto e procura por iscas de Engenharia Social.
+    """
+    try:
+        # Garante que só vai tentar ler imagens
+        extensoes_imagem = ['.png', '.jpg', '.jpeg', '.bmp']
+        if not any(caminho_arquivo.lower().endswith(ext) for ext in extensoes_imagem):
+            return False, "Não é uma imagem suportada."
+            
+        # 1. Abre a imagem usando o Pillow
+        imagem = Image.open(caminho_arquivo)
+        
+        # 2. Roda o Tesseract para extrair texto em Português
+        texto_extraido = pytesseract.image_to_string(imagem, lang='por')
+        texto_minusculo = texto_extraido.lower()
+        
+        # 3. Lista de red flags (iscas comuns)
+        gatilhos = [
+            "atualização cadastral", 
+            "dados bancários", 
+            "evite bloqueios", 
+            "sua conta", 
+            "senha"
+        ]
+        
+        # Verifica se alguma palavra-chave está no texto da imagem
+        ameaca_detectada = any(gatilho in texto_minusculo for gatilho in gatilhos)
+        
+        return ameaca_detectada, texto_extraido
+
+    except Exception as e:
+        print(f"Erro ao processar o OCR na imagem: {e}")
+        return False, str(e)

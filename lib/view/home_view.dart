@@ -8,8 +8,10 @@ import 'extensao_view.dart';
 import 'relatorio_view.dart';
 import 'sobre_view.dart';
 import 'login_view.dart';
-import 'email_view.dart'; // <-- NOVO: Import da tela de e-mails
+import 'email_view.dart'; 
 import '../controller/auth_controller.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../service/notificacao_service.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -19,8 +21,33 @@ class HomeView extends StatefulWidget {
 }
 
 class _HomeViewState extends State<HomeView> {
-  // O MonitorController e seus métodos initState/dispose foram removidos!
+  
+  // ----------------------------------------------------
+  // COLE O CÓDIGO AQUI PARA DENTRO (ANTES DO BUILD!)
+  // ----------------------------------------------------
+  @override
+  void initState() {
+    super.initState();
+    _iniciarVigilanteDeAmeacas();
+  }
 
+  void _iniciarVigilanteDeAmeacas() {
+    // Fica escutando a coleção em tempo real
+    FirebaseFirestore.instance.collection('logs_seguranca').snapshots().listen((snapshot) {
+      for (var change in snapshot.docChanges) {
+        // Se um documento NOVO for adicionado ao banco
+        if (change.type == DocumentChangeType.added) {
+          
+          // Dispara a notificação no celular
+          NotificacaoService.mostrarAlertaAmeaca(
+            "🚨 Nova Ameaça Bloqueada!",
+            "Verifique o painel. Assunto: ${change.doc['assunto'] ?? 'Desconhecido'}",
+          );
+        }
+      }
+    });
+  }
+  // ----------------------------------------------------
   @override
   Widget build(BuildContext context) {
     // Lista limpa, sem o Monitor

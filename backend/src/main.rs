@@ -15,33 +15,14 @@ async fn monitor_info() -> HttpResponse {
     HttpResponse::Ok().json(info)
 }
 
-
-
 #[derive(Deserialize)]
 struct YaraRequest {
     bytes: Vec<u8>,
     nome: String,
 }
 
-// Rota Hash Scanner
-#[post("/hash/scan")]
-async fn hash_scan(body: web::Json<hash::HashRequest>) -> HttpResponse {
-    println!("📝 Gerando hash para o arquivo: {}", body.nome); // Agora o Rust fica feliz!
-    let hash = hash::gerar_hash(&body.bytes);
-    let resultado = hash::verificar(&hash);
-    HttpResponse::Ok().json(resultado)
-}
-
-// Rota Verificador de URL
-#[post("/url/verificar")]
-async fn url_verificar(body: web::Json<url::UrlRequest>) -> HttpResponse {
-    println!("📝 Verificando URL: {}", body.url);
-    let resultado = url::verificar(&body.url);
-    HttpResponse::Ok().json(resultado)
-}
-
 pub async fn salvar_deteccao(hash: String, ameaca: bool) -> Result<(), Box<dyn std::error::Error>> {
-    // Inicializa o cliente usando a variável de ambiente com o caminho do JSON
+    // Substitua "id-do-seu-projeto" pelo ID real do seu projeto no Firebase
     let db = FirestoreDb::new("id-do-seu-projeto").await?;
 
     let log = serde_json::json!({
@@ -52,12 +33,35 @@ pub async fn salvar_deteccao(hash: String, ameaca: bool) -> Result<(), Box<dyn s
 
     // Salva na coleção "logs_seguranca"
     db.fluent()
-        .select_all()
-        .from("logs_seguranca")
-        .add(log)
+        .insert()
+        .into("logs_seguranca")
+        .document_id(&format!("log_{}", chrono::Utc::now().timestamp())) // Cria um ID único baseado na data/hora
+        .object(&log)
+        .execute::<()>()
         .await?;
 
     Ok(())
+}
+
+// Rota Hash Scanner
+#[post("/hash/scan")]
+async fn hash_scan(body: web::Json<hash::HashRequest>) -> HttpResponse {
+    println!("📝 Gerando hash para o arquivo: {}", body.nome); 
+    let hash = hash::gerar_hash(&body.bytes);
+    let resultado = hash::verificar(&hash);
+
+    // Integração com o Firebase: Salva o log de forma assíncrona
+    let _ = salvar_deteccao(resultado.hash.clone(), resultado.ameaca).await;
+
+    HttpResponse::Ok().json(resultado)
+}
+
+// Rota Verificador de URL
+#[post("/url/verificar")]
+async fn url_verificar(body: web::Json<url::UrlRequest>) -> HttpResponse {
+    println!("📝 Verificando URL: {}", body.url);
+    let resultado = url::verificar(&body.url);
+    HttpResponse::Ok().json(resultado)
 }
 
 // Rota Verificador de Extensões
@@ -83,6 +87,7 @@ async fn main() -> std::io::Result<()> {
     println!("   POST /url/verificar");
     println!("   POST /extensao/verificar");
     println!("   POST /yara/scan");
+    println!("   GET  /monitor/info");
 
     HttpServer::new(|| {
         let cors = Cors::default()
