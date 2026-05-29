@@ -7,13 +7,8 @@ mod hash;
 mod url;
 mod extensao;
 mod yara_scanner;
-mod monitor;
 
-#[actix_web::get("/monitor/info")]
-async fn monitor_info() -> HttpResponse {
-    let info = monitor::coletar_info();
-    HttpResponse::Ok().json(info)
-}
+
 
 #[derive(Deserialize)]
 struct YaraRequest {
@@ -87,7 +82,6 @@ async fn main() -> std::io::Result<()> {
     println!("   POST /url/verificar");
     println!("   POST /extensao/verificar");
     println!("   POST /yara/scan");
-    println!("   GET  /monitor/info");
 
     HttpServer::new(|| {
         let cors = Cors::default()
@@ -101,7 +95,6 @@ async fn main() -> std::io::Result<()> {
             .service(url_verificar)
             .service(extensao_verificar)
             .service(yara_scan)
-            .service(monitor_info)
     })
     .bind("127.0.0.1:8080")?
     .run()

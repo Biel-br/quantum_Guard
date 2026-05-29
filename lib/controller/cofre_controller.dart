@@ -1,68 +1,120 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../service/cofre_service.dart';
 
+/// RF003/RF004/RF005 — Controller do Cofre usando Firestore
 class CofreController extends ChangeNotifier {
   final _service = CofreService();
 
-  List<Map<String, String>> entradas = [];
-  bool carregando = false;
+  // ── Campos do formulário ──────────────────────────────────────────────────
 
   final txtSite = TextEditingController();
   final txtUsuario = TextEditingController();
   final txtSenha = TextEditingController();
+  final txtAnotacao = TextEditingController();
 
-  // Visibilidade das senhas por index
-  final Map<int, bool> _senhasVisiveis = {};
+  bool carregando = false;
+  String? erro;
 
-  bool senhaVisivel(int index) => _senhasVisiveis[index] ?? false;
+  // ── RF005: Stream em tempo real ───────────────────────────────────────────
 
-  void toggleSenha(int index) {
-    _senhasVisiveis[index] = !(_senhasVisiveis[index] ?? false);
+  Stream<QuerySnapshot> get stream => _service.stream();
+
+  // ── Visibilidade das senhas por docId ─────────────────────────────────────
+
+  final Map<String, bool> _senhasVisiveis = {};
+  bool senhaVisivel(String docId) => _senhasVisiveis[docId] ?? false;
+  void toggleSenha(String docId) {
+    _senhasVisiveis[docId] = !(_senhasVisiveis[docId] ?? false);
     notifyListeners();
   }
 
-  // Carrega as entradas ao iniciar
-  Future<void> carregar() async {
+  String getSenha(String senhaCodificada) =>
+      _service.descriptografar(senhaCodificada);
+
+  // ── RF003: Inserção ───────────────────────────────────────────────────────
+
+  Future<bool> adicionar() async {
+    if (txtSite.text.isEmpty || txtSenha.text.isEmpty) {
+      erro = 'Site e senha são obrigatórios';
+      notifyListeners();
+      return false;
+    }
+
     carregando = true;
+    erro = null;
     notifyListeners();
 
-    entradas = await _service.carregar();
-
-    carregando = false;
-    notifyListeners();
+    try {
+      await _service.adicionar(
+        site: txtSite.text.trim(),
+        usuario: txtUsuario.text.trim(),
+        senha: txtSenha.text,
+        anotacao: txtAnotacao.text.trim(),
+      );
+      limparCampos();
+      return true;
+    } catch (e) {
+      erro = 'Erro ao salvar: $e';
+      return false;
+    } finally {
+      carregando = false;
+      notifyListeners();
+    }
   }
 
-  // Adiciona nova entrada
-  Future<void> adicionar() async {
-    if (txtSite.text.isEmpty || txtSenha.text.isEmpty) return;
+  // ── RF004: Atualização ────────────────────────────────────────────────────
 
-    entradas.add({
-      'site': txtSite.text,
-      'usuario': txtUsuario.text,
-      'senha': _service.criptografar(txtSenha.text),
-    });
+  Future<bool> atualizar(String docId) async {
+    if (txtSite.text.isEmpty || txtSenha.text.isEmpty) {
+      erro = 'Site e senha são obrigatórios';
+      notifyListeners();
+      return false;
+    }
 
-    await _service.salvar(entradas);
-    limparCampos();
+    carregando = true;
+    erro = null;
     notifyListeners();
+
+    try {
+      await _service.atualizar(
+        docId: docId,
+        site: txtSite.text.trim(),
+        usuario: txtUsuario.text.trim(),
+        senha: txtSenha.text,
+        anotacao: txtAnotacao.text.trim(),
+      );
+      limparCampos();
+      return true;
+    } catch (e) {
+      erro = 'Erro ao atualizar: $e';
+      return false;
+    } finally {
+      carregando = false;
+      notifyListeners();
+    }
   }
 
-  // Remove uma entrada
-  Future<void> remover(int index) async {
-    entradas.removeAt(index);
-    _senhasVisiveis.remove(index);
-    await _service.salvar(entradas);
-    notifyListeners();
+  // ── Remoção ───────────────────────────────────────────────────────────────
+
+  Future<void> remover(String docId) async {
+    await _service.remover(docId);
   }
 
-  // Retorna a senha descriptografada
-  String getSenha(int index) {
-    return _service.descriptografar(entradas[index]['senha']!);
+  // ── Util ──────────────────────────────────────────────────────────────────
+
+  void preencherParaEdicao(Map<String, dynamic> data) {
+    txtSite.text = data['site'] ?? '';
+    txtUsuario.text = data['usuario'] ?? '';
+    txtSenha.text = _service.descriptografar(data['senha'] ?? '');
+    txtAnotacao.text = data['anotacao'] ?? '';
   }
 
   void limparCampos() {
     txtSite.clear();
     txtUsuario.clear();
     txtSenha.clear();
+    txtAnotacao.clear();
+    erro = null;
   }
 }

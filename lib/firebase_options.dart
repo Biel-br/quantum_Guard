@@ -4,16 +4,6 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
-/// Default [FirebaseOptions] for use with your Firebase apps.
-///
-/// Example:
-/// ```dart
-/// import 'firebase_options.dart';
-/// // ...
-/// await Firebase.initializeApp(
-///   options: DefaultFirebaseOptions.currentPlatform,
-/// );
-/// ```
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -29,10 +19,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for linux - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return web; // Linux usa as mesmas opções da Web
       default:
         throw UnsupportedError(
           'DefaultFirebaseOptions are not supported for this platform.',
@@ -63,6 +50,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '237814584611',
     projectId: 'quantum-guard-8bddf',
     storageBucket: 'quantum-guard-8bddf.firebasestorage.app',
+    androidClientId: '237814584611-7b336lhvtl59id5oicuh7i7ddd1594m1.apps.googleusercontent.com',
+    iosClientId: '237814584611-him275523db7373jbcuo9mn47o3mkiqp.apps.googleusercontent.com',
     iosBundleId: 'com.example.projetoPdm',
   );
 
@@ -72,6 +61,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '237814584611',
     projectId: 'quantum-guard-8bddf',
     storageBucket: 'quantum-guard-8bddf.firebasestorage.app',
+    androidClientId: '237814584611-7b336lhvtl59id5oicuh7i7ddd1594m1.apps.googleusercontent.com',
+    iosClientId: '237814584611-him275523db7373jbcuo9mn47o3mkiqp.apps.googleusercontent.com',
     iosBundleId: 'com.example.projetoPdm',
   );
 
@@ -83,4 +74,5 @@ class DefaultFirebaseOptions {
     authDomain: 'quantum-guard-8bddf.firebaseapp.com',
     storageBucket: 'quantum-guard-8bddf.firebasestorage.app',
   );
+
 }

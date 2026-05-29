@@ -1,28 +1,27 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
+import 'package:cloud_functions/cloud_functions.dart';
+
+final _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
 class HashService {
-  static const _baseUrl = 'http://127.0.0.1:8080';
-
   Future<Map<String, dynamic>?> selecionarArquivo() async {
-    final resultado = await FilePicker.platform.pickFiles(withData: true);
+    final resultado = await FilePicker.pickFiles(withData: true);
     if (resultado == null) return null;
     final arquivo = resultado.files.single;
     return {'nome': arquivo.name, 'bytes': arquivo.bytes!};
   }
 
-  // Agora chama o Rust
   Future<Map<String, dynamic>> scanArquivo(String nome, Uint8List bytes) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/hash/scan'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    try {
+      final callable = _functions.httpsCallable('hash_scan');
+      final result = await callable.call({
         'nome': nome,
         'bytes': bytes.toList(),
-      }),
-    );
-    return jsonDecode(response.body);
+      });
+      return Map<String, dynamic>.from(result.data);
+    } catch (e) {
+      throw Exception('Falha ao acionar a Cloud Function hash_scan: $e');
+    }
   }
 }

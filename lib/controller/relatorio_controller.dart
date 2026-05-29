@@ -1,78 +1,68 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../service/relatorio_service.dart';
 
 class RelatorioController extends ChangeNotifier {
   final _service = RelatorioService();
 
-  List<EntradaRelatorio> entradas = [];
-  bool carregando = false;
+  // ── Estado ────────────────────────────────────────────────────────────────
+  Stream<QuerySnapshot> get stream => _service.stream();
 
-  // Totais para o resumo
-  int get totalScans => entradas.length;
-  int get totalAmeacas => entradas.where((e) => e.ameaca).length;
-  int get totalSeguros => entradas.where((e) => !e.ameaca).length;
-
-  // Filtragem
   String filtroAtual = 'Todos';
-  final filtros = ['Todos', 'Ameaças', 'Seguros', 'Hash Scanner', 'Verificador de URL', 'Verificador de Extensões'];
+  final filtros = [
+    'Todos',
+    'Ameaças',
+    'Seguros',
+    'Hash Scanner',
+    'Verificador de URL',
+  ];
 
-  List<EntradaRelatorio> get entradasFiltradas {
-    switch (filtroAtual) {
-      case 'Ameaças':
-        return entradas.where((e) => e.ameaca).toList();
-      case 'Seguros':
-        return entradas.where((e) => !e.ameaca).toList();
-      case 'Todos':
-        return entradas;
-      default:
-        return entradas.where((e) => e.tipo == filtroAtual).toList();
-    }
-  }
-
-  // Carrega o histórico
-  Future<void> carregar() async {
-    carregando = true;
-    notifyListeners();
-
-    entradas = await _service.carregar();
-    // Mais recentes primeiro
-    entradas.sort((a, b) => b.data.compareTo(a.data));
-
-    carregando = false;
-    notifyListeners();
-  }
-
-  // Adiciona uma entrada — chamado pelos outros controllers
+  // ── Inserção / Atualização / Limpeza ─────────────────────────────────────
   Future<void> adicionarEntrada({
     required String tipo,
     required String alvo,
     required String resultado,
     required bool ameaca,
   }) async {
-    entradas.insert(0,
-      EntradaRelatorio(
-        tipo: tipo,
-        alvo: alvo,
-        resultado: resultado,
-        ameaca: ameaca,
-        data: DateTime.now(),
-      ),
+    await _service.adicionar(
+      tipo: tipo,
+      alvo: alvo,
+      resultado: resultado,
+      ameaca: ameaca,
     );
-
-    await _service.salvar(entradas);
-    notifyListeners();
   }
 
-  // Limpa todo o histórico
+  Future<void> marcarRevisado(String docId) async {
+    await _service.marcarRevisado(docId);
+  }
+
   Future<void> limpar() async {
-    entradas = [];
     await _service.limpar();
-    notifyListeners();
   }
 
-  // Altera o filtro
+  // ── Filtro (CORRIGIDO PARA NÃO DAR TELA VERMELHA) ────────────────────────
   void alterarFiltro(String filtro) {
     filtroAtual = filtro;
     notifyListeners();
+  }
+
+  List<QueryDocumentSnapshot> filtrar(List<QueryDocumentSnapshot> docs) {
+    if (filtroAtual == 'Todos') return docs;
+
+    return docs.where((d) {
+      // Leitura segura do Firebase transformando num Map
+      final data = d.data() as Map<String, dynamic>?;
+      if (data == null) return false;
+
+      if (filtroAtual == 'Ameaças') {
+        return data['ameaca'] == true;
+      } else if (filtroAtual == 'Seguros') {
+        return data['ameaca'] == false;
+      } else {
+        // Pega a origem do scan ignorando se salvou como 'origem' ou 'tipo' no passado
+        final origem = data['origem'] ?? data['tipo'] ?? 'Desconhecido';
+        return origem == filtroAtual;
+      }
+    }).toList();
   }
 }

@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /usuarios/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /cofre_senhas/{docId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid;
+    }
+
+    match /relatorio/{docId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid;
+    }
+
+    match /hashes_verificados/{docId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid;
+    }
+
+    match /usuarios_tokens/{uid} {
+      // Tokens sensíveis: apenas leitura pelo dono (se necessário).
+      // Escrita por clientes é proibida — apenas Cloud Functions/Admin SDK devem atualizar.
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /emails_analisados_temp/{docId} {
+      // Os resultados do scanner devem ser lidos apenas pelo dono (uid salvo no documento).
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      // Criação/atualização/exclusão devem ser feitas pelo backend (Admin SDK).
+      allow write: if false;
+    }
+  }
+}

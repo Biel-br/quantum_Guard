@@ -1,254 +1,227 @@
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../controller/relatorio_controller.dart';
-import '../service/relatorio_service.dart';
 
 class RelatorioView extends StatefulWidget {
-  const RelatorioView({super.key});
+  const RelatorioView({Key? key}) : super(key: key);
 
   @override
   State<RelatorioView> createState() => _RelatorioViewState();
 }
 
 class _RelatorioViewState extends State<RelatorioView> {
-  final ctrl = GetIt.I.get<RelatorioController>();
+  // Instanciando o controller que você me enviou
+  final RelatorioController _controller = RelatorioController();
 
   @override
   void initState() {
     super.initState();
-    ctrl.addListener(() => setState(() {}));
-    ctrl.carregar();
+    // Faz a tela reconstruir quando o filtro mudar
+    _controller.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Relatório de Segurança', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.red.shade700,
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text('Relatório de Scans'),
+        backgroundColor: Colors.blue[800],
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
-          if (ctrl.entradas.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Limpar histórico',
-              onPressed: () => _confirmarLimpar(context),
-            ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Limpar Histórico',
+            onPressed: () async {
+              // Dialog de confirmação
+              final confirmar = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Limpar Relatório?'),
+                  content: const Text('Todos os registros serão apagados permanentemente.'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: () => Navigator.pop(context, true), 
+                      child: const Text('Limpar', style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmar == true) {
+                await _controller.limpar();
+              }
+            },
+          )
         ],
       ),
-      body: ctrl.carregando
-        ? const Center(child: CircularProgressIndicator())
-        : ctrl.entradas.isEmpty
-          ? _buildVazio()
+      body: uid == null
+          ? const Center(child: Text('Usuário não logado.', style: TextStyle(fontSize: 18)))
           : Column(
               children: [
-                _buildResumo(),
-                _buildFiltros(),
-                Expanded(child: _buildLista()),
+                // 1. BARRA DE FILTROS (Chips)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  color: Colors.white,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: _controller.filtros.map((filtro) {
+                        final isSelected = _controller.filtroAtual == filtro;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(filtro),
+                            selected: isSelected,
+                            selectedColor: Colors.blue.shade100,
+                            onSelected: (bool selected) {
+                              if (selected) {
+                                _controller.alterarFiltro(filtro);
+                              }
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                
+                // 2. LISTA DE RESULTADOS
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('hashes_verificados')
+                        .where('uid', isEqualTo: uid)
+                        .orderBy('data', descending: true)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return _buildEmptyState('Nenhum scan realizado ainda.');
+                      }
+
+                      // Aplica o filtro local do Controller
+                      final docsFiltrados = _controller.filtrar(snapshot.data!.docs);
+
+                      if (docsFiltrados.isEmpty) {
+                        return _buildEmptyState('Nenhum resultado para este filtro.');
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: docsFiltrados.length,
+                        itemBuilder: (context, index) {
+                          final doc = docsFiltrados[index];
+                          final data = doc.data() as Map<String, dynamic>;
+                          final bool isAmeaca = data['ameaca'] ?? false;
+                          
+                          // Tratamento visual de datas e origem
+                          final String rawDate = data['data']?.toString() ?? '';
+                          final String dataFormatada = rawDate.length > 10 ? rawDate.substring(0, 10) : rawDate;
+                          // Lê a 'origem', se não existir, tenta ler o 'tipo' (que você salvava antigamente), senão usa fallback
+                          final String origem = data['origem'] ?? data['tipo'] ?? 'Desconhecido';
+
+                          return Card(
+                            elevation: 2,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: isAmeaca ? Colors.red.shade200 : Colors.green.shade200,
+                                width: 1,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: isAmeaca ? Colors.red.shade100 : Colors.green.shade100,
+                                  child: Icon(
+                                    isAmeaca ? Icons.gpp_bad : Icons.gpp_good,
+                                    color: isAmeaca ? Colors.red.shade700 : Colors.green.shade700,
+                                  ),
+                                ),
+                                title: Text(
+                                  data['nomeArquivo'] ?? data['alvo'] ?? 'Arquivo Desconhecido',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      data['status'] ?? data['resultado'] ?? (isAmeaca ? 'Ameaça Detectada' : 'Arquivo Limpo'),
+                                      style: TextStyle(
+                                        color: isAmeaca ? Colors.red.shade700 : Colors.green.shade700,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        origem,
+                                        style: TextStyle(fontSize: 12, color: Colors.blue.shade800),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      dataFormatada,
+                                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
     );
   }
 
-  // Tela vazia
-  Widget _buildVazio() {
-    return const Center(
+  Widget _buildEmptyState(String mensagem) {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.description_outlined, size: 80, color: Colors.grey),
-          SizedBox(height: 16),
+          Icon(Icons.history_toggle_off, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 16),
           Text(
-            'Nenhum scan realizado ainda',
-            style: TextStyle(fontSize: 18, color: Colors.grey),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Use as funcionalidades do app\npara gerar o relatório',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Cards de resumo
-  Widget _buildResumo() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.red.shade700,
-      child: Row(
-        children: [
-          _buildCardResumo('Total', ctrl.totalScans, Colors.white, Icons.list),
-          _buildCardResumo('Ameaças', ctrl.totalAmeacas, Colors.red.shade200, Icons.warning_amber),
-          _buildCardResumo('Seguros', ctrl.totalSeguros, Colors.green.shade300, Icons.shield),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardResumo(String label, int valor, Color cor, IconData icone) {
-    return Expanded(
-      child: Column(
-        children: [
-          Icon(icone, color: cor, size: 28),
-          const SizedBox(height: 4),
-          Text(
-            valor.toString(),
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: cor,
-            ),
-          ),
-          Text(label, style: TextStyle(color: cor, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  // Barra de filtros
-  Widget _buildFiltros() {
-    return SizedBox(
-      height: 48,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: ctrl.filtros.length,
-        itemBuilder: (context, index) {
-          final filtro = ctrl.filtros[index];
-          final selecionado = ctrl.filtroAtual == filtro;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              onTap: () => ctrl.alterarFiltro(filtro),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  color: selecionado ? Colors.red.shade700 : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  filtro,
-                  style: TextStyle(
-                    color: selecionado ? Colors.white : Colors.black87,
-                    fontWeight: selecionado ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // Lista de entradas
-  Widget _buildLista() {
-    final lista = ctrl.entradasFiltradas;
-
-    if (lista.isEmpty) {
-      return Center(
-        child: Text(
-          'Nenhum resultado para "${ctrl.filtroAtual}"',
-          style: const TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: lista.length,
-      itemBuilder: (context, index) {
-        final entrada = lista[index];
-        return _buildEntrada(entrada);
-      },
-    );
-  }
-
-  // Card de cada entrada
-  Widget _buildEntrada(EntradaRelatorio entrada) {
-    final cor = entrada.ameaca ? Colors.red : Colors.green;
-    final icone = _iconePorTipo(entrada.tipo);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: cor.withOpacity(0.1),
-          child: Icon(icone, color: cor, size: 20),
-        ),
-        title: Text(
-          entrada.alvo,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(entrada.resultado, style: TextStyle(color: cor, fontSize: 13)),
-            Text(
-              '${entrada.tipo} • ${_formatarData(entrada.data)}',
-              style: const TextStyle(color: Colors.grey, fontSize: 11),
-            ),
-          ],
-        ),
-        trailing: Icon(
-          entrada.ameaca ? Icons.warning_amber : Icons.check_circle_outline,
-          color: cor,
-        ),
-        isThreeLine: true,
-      ),
-    );
-  }
-
-  // Ícone por tipo de scan
-  IconData _iconePorTipo(String tipo) {
-    switch (tipo) {
-      case 'Hash Scanner':
-        return Icons.search;
-      case 'Verificador de URL':
-        return Icons.link;
-      case 'Verificador de Extensões':
-        return Icons.folder;
-      default:
-        return Icons.security;
-    }
-  }
-
-  // Formata a data
-  String _formatarData(DateTime data) {
-    return '${data.day.toString().padLeft(2, '0')}/'
-           '${data.month.toString().padLeft(2, '0')}/'
-           '${data.year} '
-           '${data.hour.toString().padLeft(2, '0')}:'
-           '${data.minute.toString().padLeft(2, '0')}';
-  }
-
-  // Dialog confirmar limpeza
-  void _confirmarLimpar(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Limpar histórico?'),
-        content: const Text('Todos os registros serão apagados permanentemente.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              ctrl.limpar();
-              Navigator.pop(context);
-            },
-            child: const Text('Limpar'),
+            mensagem,
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
           ),
         ],
       ),

@@ -1,22 +1,23 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:cloud_functions/cloud_functions.dart';
+
+// Instância apontando para us-central1 (obrigatório para funções v2)
+final _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
 class UrlService {
-  static const _baseUrl = 'http://127.0.0.1:8080';
-
   Future<ResultadoUrl> verificar(String url) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/url/verificar'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'url': url}),
-    );
-    final data = jsonDecode(response.body);
-    return ResultadoUrl(
-      url: data['url'],
-      dominio: data['dominio'],
-      ameaca: data['ameaca'],
-      tipoAmeaca: data['tipo_ameaca'],
-    );
+    try {
+      final callable = _functions.httpsCallable('url_verificar');
+      final result = await callable.call({'url': url});
+      final data = result.data;
+      return ResultadoUrl(
+        url: data['url'],
+        dominio: data['dominio'],
+        ameaca: data['ameaca'],
+        tipoAmeaca: data['tipo_ameaca'],
+      );
+    } catch (e) {
+      throw Exception('Falha ao acionar a Cloud Function: $e');
+    }
   }
 }
 

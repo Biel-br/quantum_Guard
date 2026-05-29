@@ -1,26 +1,69 @@
-# Flutter
-build/
+
 .dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
+build/
 .pub-cache/
 .pub/
-*.iml
+/android/app/src/main/gen/
+/android/app/profile/
+/android/app/release/
+/android/app/build/
+/ios/Flutter/App.framework
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/app.flx
+/ios/Flutter/app.zip
+/ios/Flutter/flutter_assets/
+/ios/Flutter/flutter_export_environment.sh
+/ios/Pods/
+flutter_*.log
 
-# Rust
-backend/target/
-**/target/
 
-# IDE
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+
+/backend/target/
+/backend/motor_anti-phishing/target/
+**/*.rs.bk
+
+
+.firebase/
+firestore-debug.log
+firepit-log.txt
+ui-debug.log
+firebase-debug.log
+
+
 .idea/
 .vscode/
-*.log
-
-# OS
-.DS_Store
+*.iml
+*.DS_Store
 Thumbs.db
 
-#python
-backend/venv/
-backend/motor_antiphishing/credentials.py
-backend/motor_antiphishing/token.json
+
+historico_ameacas.json
+teste_*.txt
+teste_*.bin
+
+credentials.json
+token.json
+*firebase-adminsdk*.json
+.env
+
+
+/functions/venv/
+/functions/env/
+/functions/__pycache__/
+/functions/anexos_suspeitos/
+*.zip
+
+
+teste_*.txt
+teste_*.bin
+historico_ameacas.json

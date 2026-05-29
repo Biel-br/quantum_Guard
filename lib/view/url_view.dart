@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
 import '../controller/url_controller.dart';
 
 class UrlView extends StatefulWidget {
@@ -10,12 +9,19 @@ class UrlView extends StatefulWidget {
 }
 
 class _UrlViewState extends State<UrlView> {
-  final ctrl = GetIt.I.get<UrlController>();
+  // Instância direta, sem depender do GetIt
+  final UrlController ctrl = UrlController();
 
   @override
   void initState() {
     super.initState();
     ctrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    ctrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -30,7 +36,6 @@ class _UrlViewState extends State<UrlView> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            // Campo de URL
             TextField(
               controller: ctrl.txtUrl,
               decoration: InputDecoration(
@@ -56,7 +61,6 @@ class _UrlViewState extends State<UrlView> {
 
             const SizedBox(height: 16),
 
-            // Botão verificar
             SizedBox(
               width: double.infinity,
               child: ctrl.carregando
@@ -74,7 +78,7 @@ class _UrlViewState extends State<UrlView> {
                     ),
                     onPressed: () async {
                       await ctrl.verificar();
-                      if (mounted && ctrl.verificado) {
+                      if (mounted && ctrl.verificado && ctrl.resultado != null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(ctrl.resultado!.ameaca
@@ -92,11 +96,9 @@ class _UrlViewState extends State<UrlView> {
 
             const SizedBox(height: 40),
 
-            // Resultado
             if (ctrl.verificado && ctrl.resultado != null)
               _buildResultado(ctrl.resultado!),
 
-            // Estado inicial
             if (!ctrl.verificado)
               Column(
                 children: [
@@ -114,7 +116,7 @@ class _UrlViewState extends State<UrlView> {
     );
   }
 
-  Widget _buildResultado(resultado) {
+  Widget _buildResultado(dynamic resultado) {
     final ameaca = resultado.ameaca;
 
     return Container(
@@ -129,16 +131,12 @@ class _UrlViewState extends State<UrlView> {
       ),
       child: Column(
         children: [
-          // Ícone
           Icon(
             ameaca ? Icons.dangerous : Icons.verified_user,
             size: 64,
             color: ameaca ? Colors.red : Colors.green,
           ),
-
           const SizedBox(height: 12),
-
-          // Status principal
           Text(
             ameaca ? '⚠️ URL Perigosa!' : '✅ URL Segura',
             style: TextStyle(
@@ -147,16 +145,11 @@ class _UrlViewState extends State<UrlView> {
               color: ameaca ? Colors.red : Colors.green,
             ),
           ),
-
           const SizedBox(height: 8),
-
-          // Domínio analisado
           Text(
             'Domínio: ${resultado.dominio}',
             style: const TextStyle(fontSize: 14, color: Colors.grey),
           ),
-
-          // Tipo de ameaça
           if (ameaca && resultado.tipoAmeaca != null) ...[
             const SizedBox(height: 8),
             Container(

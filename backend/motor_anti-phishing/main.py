@@ -58,7 +58,9 @@ def gerar_relatorio_humano(ameacas):
         texto += "• Espião de Teclado: Encontramos um vírus oculto que tenta copiar tudo o que você digita, como suas senhas do banco, mensagens e dados de cartão.\n"
     if "DetectarShellcode" in regras_acionadas or "DetectarBackdoor" in regras_acionadas:
         texto += "• Invasão de Privacidade: Há um programa perigoso tentando abrir uma 'porta oculta' para alguém controlar seu aparelho à distância.\n"
-        
+    if "DetectarPhishingPorImagem" in regras_acionadas:
+        texto += "• Engenharia Social: Identificamos uma imagem tentando se passar por um aviso urgente do banco para roubar seus dados (Atualização Cadastral falsa).\n"
+
     texto += "\nVocê não precisa se preocupar ou fazer nada. O Quantum Guard já isolou o perigo para você!"
     return texto
 
@@ -102,7 +104,7 @@ def obter_historico_dashboard():
 @app.get("/api/v1/patrulha/executar")
 def executar_patrulha_invisivel(quantidade: int = 50):
     """Rota que varre os últimos e-mails, neutraliza os ruins e salva no DB."""
-    resultados = servico_gmail.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=quantidade).execute()
+    resultados = servico_gmail.users().messages().list(userId='me', q='is:unread in:inbox -category:promotions', maxResults=quantidade).execute()
     mensagens = resultados.get('messages', [])
     
     ameacas_neutralizadas_agora = 0
@@ -133,23 +135,27 @@ def executar_patrulha_invisivel(quantidade: int = 50):
                         caminho_arquivo = anexo["caminho_local"]
                         tipo = anexo["tipo"]
                         
+                        # NOVO: Puxa o resultado do OCR que o leitor_gmail fez!
+                        ameaca_ocr = anexo.get("ameaca_ocr", False)
+                        if ameaca_ocr:
+                            todas_ameacas.append("DetectarPhishingPorImagem")
+                        
                         if os.path.exists(caminho_arquivo):
-                            # Binário
-                            for m in regras_yara.match(caminho_arquivo): todas_ameacas.append(m.rule)
+                            # Binário (YARA)
+                            for m in regras_yara.match(caminho_arquivo): 
+                                se_nao_existe = m.rule not in todas_ameacas
+                                if se_nao_existe:
+                                    todas_ameacas.append(m.rule)
                             
-                            # Extração de texto (PDF/OCR)
+                            # Extração de texto (PDF/OCR secundário)
                             texto_extraido = ""
                             if tipo == "application/pdf":
                                 try:
                                     leitor = PdfReader(caminho_arquivo)
                                     for pagina in leitor.pages: texto_extraido += pagina.extract_text() + "\n"
                                 except: pass
-                            elif tipo in ["image/png", "image/jpeg", "image/jpg"]:
-                                try:
-                                    texto_extraido = pytesseract.image_to_string(Image.open(caminho_arquivo), lang='por')
-                                except: pass
-
-                            # YARA no texto
+                            
+                            # YARA no texto extraído do PDF
                             if texto_extraido.strip():
                                 caminho_txt = caminho_arquivo + ".txt"
                                 with open(caminho_txt, "w", encoding="utf-8") as f: f.write(texto_extraido)

@@ -1,1 +1,60 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"quantum-guard-8bddf","appId":"1:237814584611:android:94331c964b85efd70ee896","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"quantum-guard-8bddf","configurations":{"android":"1:237814584611:android:94331c964b85efd70ee896","ios":"1:237814584611:ios:e430d41246b129f90ee896","macos":"1:237814584611:ios:e430d41246b129f90ee896","web":"1:237814584611:web:728c33870db3acc50ee896","windows":"1:237814584611:web:58eafcf8571692950ee896"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "quantum-guard-8bddf",
+          "appId": "1:237814584611:android:94331c964b85efd70ee896",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "quantum-guard-8bddf",
+          "configurations": {
+            "android": "1:237814584611:android:94331c964b85efd70ee896",
+            "ios": "1:237814584611:ios:e430d41246b129f90ee896",
+            "macos": "1:237814584611:ios:e430d41246b129f90ee896",
+            "web": "1:237814584611:web:728c33870db3acc50ee896",
+            "windows": "1:237814584611:web:58eafcf8571692950ee896"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "southamerica-east1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "venv",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "runtime": "python312"
+    }
+  ]
+}

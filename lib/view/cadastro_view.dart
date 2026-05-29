@@ -14,11 +14,13 @@ class _CadastroViewState extends State<CadastroView> {
   final ctrl = GetIt.I.get<AuthController>();
 
   @override
-  void initState() {
-    super.initState();
-    ctrl.addListener(() => setState(() {}));
+void initState() {
+  super.initState();
+  // Aguarda a tela renderizar para depois limpar os campos
+  WidgetsBinding.instance.addPostFrameCallback((_) {
     ctrl.limparCamposCadastro();
-  }
+  });
+}
 
   @override
   Widget build(BuildContext context) {

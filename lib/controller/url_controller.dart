@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../service/url_service.dart';
-import '../controller/relatorio_controller.dart';
 
 class UrlController extends ChangeNotifier {
   final _service = UrlService();
-  final _relatorio = GetIt.I.get<RelatorioController>();
-
   final txtUrl = TextEditingController();
 
   bool carregando = false;
@@ -24,18 +22,23 @@ class UrlController extends ChangeNotifier {
       resultado = await _service.verificar(txtUrl.text);
       verificado = true;
 
-      // Salva no relatório
-      _relatorio.adicionarEntrada(
-        tipo: 'Verificador de URL',
-        alvo: txtUrl.text,
-        resultado: resultado!.ameaca
-          ? resultado!.tipoAmeaca!
-          : 'URL segura',
-        ameaca: resultado!.ameaca,
-      );
+      // ── Gravação Direta no Banco Unificado ─────────────────────────
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('hashes_verificados').add({
+          'uid': uid,
+          // Usamos 'nomeArquivo' para a URL aparecer corretamente na barra de Pesquisa Avançada
+          'nomeArquivo': txtUrl.text, 
+          'status': resultado!.ameaca ? (resultado!.tipoAmeaca ?? 'Perigoso') : 'URL Segura',
+          'ameaca': resultado!.ameaca,
+          'data': DateTime.now().toIso8601String(),
+          'origem': 'Verificador de URL', // Fundamental para o Filtro do Relatório funcionar
+        });
+      }
 
     } catch (e) {
       resultado = null;
+      print("Erro ao verificar URL: $e");
     }
 
     carregando = false;

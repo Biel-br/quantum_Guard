@@ -1,22 +1,64 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+// ⚠️ Garanta que esta importação está exatamente assim:
+import 'package:google_sign_in/google_sign_in.dart';
 
 class EmailService {
-  // Lembre-se de usar o IP correto (127.0.0.1 para Web/Linux)
-  final String baseUrl = "http://127.0.0.1:8000/api/v1";
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  bool _googleSignInInitialized = false;
 
-  Future<Map<String, dynamic>> obterHistoricoDashboard() async {
+  Future<void> _initializeGoogleSignIn() async {
+    if (_googleSignInInitialized) return;
+    await _googleSignIn.initialize();
+    _googleSignInInitialized = true;
+  }
+
+  Future<Map<String, dynamic>> escanearEmails({int maxEmails = 100}) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/dashboard/historico'));
+      await _initializeGoogleSignIn();
+      final List<String> scopes = <String>[
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.modify',
+      ];
 
-      if (response.statusCode == 200) {
-        return jsonDecode(utf8.decode(response.bodyBytes));
-      } else {
-        throw Exception("Falha ao carregar o painel de segurança.");
+      // Verifica se o usuário está autenticado no Firebase (necessário para
+      // que a cloud function consiga identificar o uid e salvar no Firestore)
+      final User? usuario = FirebaseAuth.instance.currentUser;
+      if (usuario == null) {
+        throw Exception(
+          'Usuário não autenticado. Faça login no app antes de escanear.',
+        );
       }
+
+      final GoogleSignInAccount googleUser = await _googleSignIn.authenticate(
+        scopeHint: scopes,
+      );
+
+      final GoogleSignInClientAuthorization authorization = await googleUser
+          .authorizationClient
+          .authorizeScopes(scopes);
+      final String accessToken = authorization.accessToken;
+
+      if (accessToken.isEmpty) {
+        throw Exception("Não foi possível obter a chave de acesso do Google.");
+      }
+
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'gmail_escanear_emails',
+      );
+      final result = await callable.call({
+        'access_token': accessToken,
+        'max_emails': maxEmails,
+      });
+
+      return Map<String, dynamic>.from(result.data);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        throw Exception('Login cancelado pelo usuário.');
+      }
+      throw Exception('Falha no login Google: ${e.description ?? e.code}');
     } catch (e) {
-      print("Erro no Service: $e");
-      return {"ameacas_bloqueadas": [], "total": 0};
+      throw Exception('Falha na comunicação com o backend: $e');
     }
   }
 }

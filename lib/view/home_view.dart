@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
-import 'package:projeto_pdm/view/yara_view.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+// Suas Views
 import 'hash_view.dart';
+import 'url_view.dart'; // ⬅️ IMPORT DA TELA DE URL ADICIONADO
 import 'cofre_view.dart';
-import 'url_view.dart';
-import 'extensao_view.dart';
 import 'relatorio_view.dart';
 import 'sobre_view.dart';
 import 'login_view.dart';
-import 'email_view.dart'; 
-import '../controller/auth_controller.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'perfil_view.dart';
+import 'search_view.dart' as minha_pesquisa;
+
+// Controllers e Services
 import '../service/notificacao_service.dart';
+import '../service/auth_service.dart'; // ⬅️ IMPORT DO SERVICE CORRETO
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -21,10 +23,6 @@ class HomeView extends StatefulWidget {
 }
 
 class _HomeViewState extends State<HomeView> {
-  
-  // ----------------------------------------------------
-  // COLE O CÓDIGO AQUI PARA DENTRO (ANTES DO BUILD!)
-  // ----------------------------------------------------
   @override
   void initState() {
     super.initState();
@@ -32,13 +30,9 @@ class _HomeViewState extends State<HomeView> {
   }
 
   void _iniciarVigilanteDeAmeacas() {
-    // Fica escutando a coleção em tempo real
     FirebaseFirestore.instance.collection('logs_seguranca').snapshots().listen((snapshot) {
       for (var change in snapshot.docChanges) {
-        // Se um documento NOVO for adicionado ao banco
         if (change.type == DocumentChangeType.added) {
-          
-          // Dispara a notificação no celular
           NotificacaoService.mostrarAlertaAmeaca(
             "🚨 Nova Ameaça Bloqueada!",
             "Verifique o painel. Assunto: ${change.doc['assunto'] ?? 'Desconhecido'}",
@@ -47,10 +41,9 @@ class _HomeViewState extends State<HomeView> {
       }
     });
   }
-  // ----------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    // Lista limpa, sem o Monitor
     final funcionalidades = [
       {
         'titulo': 'Hash Scanner',
@@ -59,28 +52,28 @@ class _HomeViewState extends State<HomeView> {
         'tela': const HashView(),
       },
       {
+        'titulo': 'Verificador de URL', // ⬅️ VOLTOU PARA A TELA!
+        'icone': Icons.link,
+        'cor': Colors.purple,
+        'tela': const UrlView(), // Verifique se o nome da sua classe é exatamente UrlView
+      },
+      {
+        'titulo': 'Meu Perfil',
+        'icone': Icons.person,
+        'cor': Colors.deepOrange,
+        'tela': const PerfilView(),
+      },
+      {
+        'titulo': 'Pesquisa Avançada',
+        'icone': Icons.manage_search,
+        'cor': Colors.indigo,
+        'tela': const minha_pesquisa.SearchView(),
+      },
+      {
         'titulo': 'Cofre de Senhas',
         'icone': Icons.lock,
         'cor': Colors.green,
         'tela': const CofreView(),
-      },
-      {
-        'titulo': 'Verificador de URLs',
-        'icone': Icons.link,
-        'cor': Colors.orange,
-        'tela': const UrlView(),
-      },
-      {
-        'titulo': 'Verificador de Extensões',
-        'icone': Icons.folder,
-        'cor': Colors.purple,
-        'tela': const ExtensaoView(),
-      },
-      {
-        'titulo': 'YARA Scanner',
-        'icone': Icons.policy,
-        'cor': Colors.deepOrange,
-        'tela': const YaraView(),
       },
       {
         'titulo': 'Relatórios',
@@ -126,17 +119,25 @@ class _HomeViewState extends State<HomeView> {
                         foregroundColor: Colors.white,
                       ),
                       onPressed: () async {
-                        final ctrl = GetIt.I.get<AuthController>();
-                        await ctrl.logout();
-                        if (context.mounted) {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginView(),
-                            ),
-                          );
-                        }
-                      },
+  // Salva o navegador antes de qualquer operação assíncrona (Evita o erro de context do Flutter)
+  final navigator = Navigator.of(context);
+  
+  // 1. Tira o pop-up da tela
+  navigator.pop(); 
+  
+  // 2. Faz o logout ignorando qualquer erro silencioso
+  try {
+    await AuthService().logout();
+  } catch (e) {
+    print('Erro ignorado no logout: $e');
+  }
+  
+  // 3. Joga para a tela de login
+  navigator.pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const LoginView()),
+    (Route<dynamic> route) => false,
+  );
+},
                       child: const Text('Sair'),
                     ),
                   ],
@@ -146,125 +147,51 @@ class _HomeViewState extends State<HomeView> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 1. DESTAQUE: Caixa de Entrada Protegida
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: Colors.blue.shade900.withOpacity(0.3), width: 1),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.1,
+          ),
+          itemCount: funcionalidades.length,
+          itemBuilder: (context, index) {
+            final item = funcionalidades[index];
+            return GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => item['tela'] as Widget),
               ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const EmailView()),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade900.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.mark_email_read,
-                          size: 36,
-                          color: Colors.blue.shade900,
-                        ),
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      item['icone'] as IconData,
+                      size: 42,
+                      color: item['cor'] as Color,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      item['titulo'] as String,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Caixa de Entrada",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              "Escanear e-mails contra Phishing e Malware",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
-                    ],
-                  ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-
-          // 2. GRID DAS OUTRAS FERRAMENTAS
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.1, // Deixa os cards um pouco mais retangulares
-                ),
-                itemCount: funcionalidades.length,
-                itemBuilder: (context, index) {
-                  final item = funcionalidades[index];
-                  return GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => item['tela'] as Widget,
-                      ),
-                    ),
-                    child: Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            item['icone'] as IconData,
-                            size: 42,
-                            color: item['cor'] as Color,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            item['titulo'] as String,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }
