@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Suas Views
 import 'hash_view.dart';
-import 'url_view.dart'; // ⬅️ IMPORT DA TELA DE URL ADICIONADO
+import 'url_view.dart'; 
 import 'cofre_view.dart';
 import 'relatorio_view.dart';
 import 'sobre_view.dart';
@@ -13,7 +13,7 @@ import 'search_view.dart' as minha_pesquisa;
 
 // Controllers e Services
 import '../service/notificacao_service.dart';
-import '../service/auth_service.dart'; // ⬅️ IMPORT DO SERVICE CORRETO
+import '../service/auth_service.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -52,10 +52,10 @@ class _HomeViewState extends State<HomeView> {
         'tela': const HashView(),
       },
       {
-        'titulo': 'Verificador de URL', // ⬅️ VOLTOU PARA A TELA!
+        'titulo': 'Verificador de URL', 
         'icone': Icons.link,
         'cor': Colors.purple,
-        'tela': const UrlView(), // Verifique se o nome da sua classe é exatamente UrlView
+        'tela': const UrlView(), 
       },
       {
         'titulo': 'Meu Perfil',
@@ -125,7 +125,7 @@ class _HomeViewState extends State<HomeView> {
   // 1. Tira o pop-up da tela
   navigator.pop(); 
   
-  // 2. Faz o logout ignorando qualquer erro silencioso
+  // 2. Faz o logout 
   try {
     await AuthService().logout();
   } catch (e) {

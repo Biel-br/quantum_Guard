@@ -67,3 +67,5 @@ token.json
 teste_*.txt
 teste_*.bin
 historico_ameacas.json
+
+firebase_key.json
